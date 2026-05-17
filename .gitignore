@@ -1,0 +1,3 @@
+fabric_cicd.error.log
+semantic_models.csv
+*.pyc

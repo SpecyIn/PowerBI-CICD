@@ -1,0 +1,143 @@
+name: Power BI CI/CD
+
+on:
+  push:
+    branches:
+      - "master/**"
+
+concurrency:
+  group: powerbi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-development:
+    if: startsWith(github.ref, 'refs/heads/master/')
+    runs-on: ubuntu-latest
+    environment: development
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - name: Set REPORT_FOLDER from branch name
+        shell: bash
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"        # e.g. master/SalesDashboard
+          REPORT="${BRANCH#master/}"         # -> SalesDashboard
+          echo "REPORT_FOLDER=$REPORT" >> "$GITHUB_ENV"
+          echo "Deploying folder /Reports/$REPORT from REPO_DIR=."
+
+      - name: Validate report folder exists
+        shell: bash
+        run: |
+          if [ ! -d "Reports/${{ env.REPORT_FOLDER }}" ]; then
+            echo "Folder does not exist: Reports/${{ env.REPORT_FOLDER }}"
+            exit 1
+          fi
+
+      - name: exec Deploy Script
+        run: python -u scripts/deploy.py
+        env:
+          FABRIC_TENANT_ID: ${{ secrets.TENANT_ID }}
+          FABRIC_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          FABRIC_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          FABRIC_WORKSPACE_ID: ${{ vars.WORKSPACE_ID }}
+          FABRIC_ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          REPORT_FOLDER: ${{ env.REPORT_FOLDER }}
+          PYTHONUNBUFFERED: "1"
+          
+  deploy-uat:
+    if: startsWith(github.ref, 'refs/heads/master/')
+    runs-on: ubuntu-latest
+    environment: uat
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - name: Set REPORT_FOLDER from branch name
+        shell: bash
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"        # e.g. master/SalesDashboard
+          REPORT="${BRANCH#master/}"         # -> SalesDashboard
+          echo "REPORT_FOLDER=$REPORT" >> "$GITHUB_ENV"
+          echo "Deploying folder /Reports/$REPORT from REPO_DIR=."
+
+      - name: Validate report folder exists
+        shell: bash
+        run: |
+          if [ ! -d "Reports/${{ env.REPORT_FOLDER }}" ]; then
+            echo "Folder does not exist: Reports/${{ env.REPORT_FOLDER }}"
+            exit 1
+          fi
+
+      - name: exec Deploy Script
+        run: python -u scripts/deploy.py
+        env:
+          FABRIC_TENANT_ID: ${{ secrets.TENANT_ID }}
+          FABRIC_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          FABRIC_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          FABRIC_WORKSPACE_ID: ${{ vars.WORKSPACE_ID }}
+          FABRIC_ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          REPORT_FOLDER: ${{ env.REPORT_FOLDER }}
+          PYTHONUNBUFFERED: "1"
+
+  deploy-production:
+    if: startsWith(github.ref, 'refs/heads/master/')
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - name: Set REPORT_FOLDER from branch name
+        shell: bash
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"        # e.g. master/SalesDashboard
+          REPORT="${BRANCH#master/}"         # -> SalesDashboard
+          echo "REPORT_FOLDER=$REPORT" >> "$GITHUB_ENV"
+          echo "Deploying folder /Reports/$REPORT from REPO_DIR=."
+
+      - name: Validate report folder exists
+        shell: bash
+        run: |
+          if [ ! -d "Reports/${{ env.REPORT_FOLDER }}" ]; then
+            echo "Folder does not exist: Reports/${{ env.REPORT_FOLDER }}"
+            exit 1
+          fi
+
+      - name: exec Deploy Script
+        run: python -u scripts/deploy.py
+        env:
+          FABRIC_TENANT_ID: ${{ secrets.TENANT_ID }}
+          FABRIC_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          FABRIC_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          FABRIC_WORKSPACE_ID: ${{ vars.WORKSPACE_ID }}
+          FABRIC_ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          REPORT_FOLDER: ${{ env.REPORT_FOLDER }}
+          PYTHONUNBUFFERED: "1"

@@ -1,0 +1,22 @@
+find_replace:
+
+# To switch the PowerBI workspace for development, UAT and production environments, we will replace the workspace URL in the report and semantic model items with the corresponding workspace URL for each environment.
+  - find_value: "powerbi://api.powerbi.com/v1.0/myorg/DABI-PowerBI-Workspace-Dev"
+    replace_value:
+        development: "powerbi://api.powerbi.com/v1.0/myorg/DABI-PowerBI-Workspace-Dev"
+        uat: "powerbi://api.powerbi.com/v1.0/myorg/DABI-PowerBI-Workspace-UAT"
+        production: "powerbi://api.powerbi.com/v1.0/myorg/DABI-PowerBI-Workspace-Prod"
+
+# To switch the data source for development, UAT and production environments, we will replace the data source URL in the report and semantic model items with the corresponding data source URL for each environment.
+  - find_value: "ajcgrdiazmbehpsrgarkkmhc64-j3tl4xsuzusubpkurwnu5o7rcy.datawarehouse.fabric.microsoft.com"
+    replace_value:
+        development: "ajcgrdiazmbehpsrgarkkmhc64-j3tl4xsuzusubpkurwnu5o7rcy.datawarehouse.fabric.microsoft.com"
+        uat: "ajcgrdiazmbehpsrgarkkmhc64-344pzyewmilutmwaoddedh47fy.datawarehouse.fabric.microsoft.com"
+        production: "ajcgrdiazmbehpsrgarkkmhc64-muixb6tslr6uno52ub5cyjh3c4.datawarehouse.fabric.microsoft.com"
+
+#If you wanted to use environment variables to manage the workspace IDs, you can replace the workspace ID in the report and semantic model items with the corresponding environment variable for each environment.
+  - find_value: "$ENV:development_workspace_id"
+    replace_value:
+        development: "$ENV:development_workspace_id"
+        uat: "$ENV:uat_workspace_id"
+        production: "$ENV:production_workspace_id"
