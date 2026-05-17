@@ -36,7 +36,7 @@ Developers create feature branches from the dashboard master branch.
 
 Example:
 
-- `feature/ShivaramJ/SalesDashboard`
+- `feature/ShivaramJimada/SalesDashboard`
 
 Before working, the feature branch should be up to date with both:
 
