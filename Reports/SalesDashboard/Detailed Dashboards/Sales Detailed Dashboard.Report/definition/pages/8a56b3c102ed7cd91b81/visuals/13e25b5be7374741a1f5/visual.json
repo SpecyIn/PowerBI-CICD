@@ -1,0 +1,102 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.8.0/schema.json",
+  "name": "13e25b5be7374741a1f5",
+  "position": {
+    "x": 9.9843993759750376,
+    "y": 0,
+    "z": 0,
+    "height": 720.20800832033274,
+    "width": 1270.015600624025,
+    "tabOrder": 0
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "autoSelectVisualType": true,
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "publicholidays"
+                    }
+                  },
+                  "Property": "countryOrRegion"
+                }
+              },
+              "queryRef": "publicholidays.countryOrRegion",
+              "nativeQueryRef": "countryOrRegion"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "publicholidays"
+                    }
+                  },
+                  "Property": "countryRegionCode"
+                }
+              },
+              "queryRef": "publicholidays.countryRegionCode",
+              "nativeQueryRef": "countryRegionCode"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "publicholidays"
+                  }
+                },
+                "Property": "countryOrRegion"
+              }
+            },
+            "direction": "Ascending"
+          }
+        ]
+      }
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "6addf71973a8f4a1e419",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "publicholidays"
+              }
+            },
+            "Property": "countryOrRegion"
+          }
+        },
+        "type": "Categorical"
+      },
+      {
+        "name": "15cb3a80f14557de72f0",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "publicholidays"
+              }
+            },
+            "Property": "countryRegionCode"
+          }
+        },
+        "type": "Categorical"
+      }
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+relationship b1383c4b-65fc-453c-ab2d-8528770faa97
+	joinOnDateBehavior: datePartOnly
+	fromColumn: publicholidays.date
+	toColumn: LocalDateTable_a171d9ec-7379-42b0-b758-32b0f124066a.Date
+
