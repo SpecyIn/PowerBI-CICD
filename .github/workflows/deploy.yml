@@ -55,6 +55,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
           
   deploy-uat:
+    needs: deploy-development
     if: startsWith(github.ref, 'refs/heads/master/')
     runs-on: ubuntu-latest
     environment: uat
@@ -99,6 +100,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
 
   deploy-production:
+    needs: deploy-uat
     if: startsWith(github.ref, 'refs/heads/master/')
     runs-on: ubuntu-latest
     environment: production
