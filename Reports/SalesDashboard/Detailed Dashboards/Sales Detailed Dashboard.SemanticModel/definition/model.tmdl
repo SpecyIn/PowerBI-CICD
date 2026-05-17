@@ -1,0 +1,20 @@
+model Model
+	culture: en-IN
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-IN
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation __PBI_TimeIntelligenceEnabled = 1
+
+annotation PBI_QueryOrder = ["publicholidays"]
+
+annotation PBI_ProTooling = ["DevMode"]
+
+ref table publicholidays
+ref table DateTableTemplate_6fb4efb0-7026-4149-a3dd-5158e1967081
+ref table LocalDateTable_a171d9ec-7379-42b0-b758-32b0f124066a
+
+ref cultureInfo en-IN
+

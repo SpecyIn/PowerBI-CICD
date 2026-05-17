@@ -1,0 +1,69 @@
+table publicholidays
+	lineageTag: 52c33011-d6b7-4dc7-b33c-ddbe55d51f36
+
+	column countryOrRegion
+		dataType: string
+		lineageTag: 286847d8-82ca-4818-92da-027470af959a
+		summarizeBy: none
+		sourceColumn: countryOrRegion
+
+		annotation SummarizationSetBy = Automatic
+
+	column holidayName
+		dataType: string
+		lineageTag: d3d3817f-8cd8-4919-8092-3eae406c8de1
+		summarizeBy: none
+		sourceColumn: holidayName
+
+		annotation SummarizationSetBy = Automatic
+
+	column normalizeHolidayName
+		dataType: string
+		lineageTag: 516b145b-a1ea-46b6-9715-cb7d47f2759f
+		summarizeBy: none
+		sourceColumn: normalizeHolidayName
+
+		annotation SummarizationSetBy = Automatic
+
+	column isPaidTimeOff
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 3b96bc0b-41ad-4aa8-956d-92eba367d8bf
+		summarizeBy: none
+		sourceColumn: isPaidTimeOff
+
+		annotation SummarizationSetBy = Automatic
+
+	column countryRegionCode
+		dataType: string
+		lineageTag: 300421c5-23f1-40f5-adac-d424376d38ad
+		summarizeBy: none
+		sourceColumn: countryRegionCode
+
+		annotation SummarizationSetBy = Automatic
+
+	column date
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 1148a446-f051-4fd1-9fa5-c69f606f82cb
+		summarizeBy: none
+		sourceColumn: date
+
+		variation Variation
+			isDefault
+			relationship: b1383c4b-65fc-453c-ab2d-8528770faa97
+			defaultHierarchy: LocalDateTable_a171d9ec-7379-42b0-b758-32b0f124066a.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	partition publicholidays = m
+		mode: import
+		source =
+				let
+				    Source = Sql.Database("ajcgrdiazmbehpsrgarkkmhc64-j3tl4xsuzusubpkurwnu5o7rcy.datawarehouse.fabric.microsoft.com", "Lakehouse"),
+				    dbo_publicholidays = Source{[Schema="dbo",Item="publicholidays"]}[Data]
+				in
+				    dbo_publicholidays
+
+	annotation PBI_ResultType = Table
+
