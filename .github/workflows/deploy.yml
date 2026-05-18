@@ -46,11 +46,11 @@ jobs:
       - name: exec Deploy Script
         run: python -u scripts/deploy.py
         env:
-          FABRIC_TENANT_ID: ${{ secrets.TENANT_ID }}
-          FABRIC_CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          FABRIC_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          FABRIC_WORKSPACE_ID: ${{ vars.WORKSPACE_ID }}
-          FABRIC_ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          TENANT_ID: ${{ secrets.TENANT_ID }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          WORKSPACE_ID: ${{ vars.WORKSPACE_ID }}
+          ENVIRONMENT: ${{ vars.ENVIRONMENT }}
           REPORT_FOLDER: ${{ env.REPORT_FOLDER }}
           PYTHONUNBUFFERED: "1"
           
@@ -91,11 +91,11 @@ jobs:
       - name: exec Deploy Script
         run: python -u scripts/deploy.py
         env:
-          FABRIC_TENANT_ID: ${{ secrets.TENANT_ID }}
-          FABRIC_CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          FABRIC_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          FABRIC_WORKSPACE_ID: ${{ vars.WORKSPACE_ID }}
-          FABRIC_ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          TENANT_ID: ${{ secrets.TENANT_ID }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          WORKSPACE_ID: ${{ vars.WORKSPACE_ID }}
+          ENVIRONMENT: ${{ vars.ENVIRONMENT }}
           REPORT_FOLDER: ${{ env.REPORT_FOLDER }}
           PYTHONUNBUFFERED: "1"
 
@@ -136,10 +136,10 @@ jobs:
       - name: exec Deploy Script
         run: python -u scripts/deploy.py
         env:
-          FABRIC_TENANT_ID: ${{ secrets.TENANT_ID }}
-          FABRIC_CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          FABRIC_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          FABRIC_WORKSPACE_ID: ${{ vars.WORKSPACE_ID }}
-          FABRIC_ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+          TENANT_ID: ${{ secrets.TENANT_ID }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          WORKSPACE_ID: ${{ vars.WORKSPACE_ID }}
+          ENVIRONMENT: ${{ vars.ENVIRONMENT }}
           REPORT_FOLDER: ${{ env.REPORT_FOLDER }}
           PYTHONUNBUFFERED: "1"
