@@ -5,19 +5,15 @@ FABRIC_SCOPE = "https://api.fabric.microsoft.com/.default"
 
 
 _ALIASES = {
-    "FABRIC_TENANT_ID": ["TENANT_ID", "AZURE_TENANT_ID"],
-    "FABRIC_CLIENT_ID": ["CLIENT_ID", "AZURE_CLIENT_ID"],
-    "FABRIC_CLIENT_SECRET": ["CLIENT_SECRET", "AZURE_CLIENT_SECRET"],
-    "FABRIC_WORKSPACE_ID": ["WORKSPACE_ID"],
-    "FABRIC_ENVIRONMENT": ["ENVIRONMENT"],
+    "FABRIC_TENANT_ID": ["TENANT_ID", "AZURE_TENANT_ID", "FABRIC_TENANT_ID"],
+    "FABRIC_CLIENT_ID": ["CLIENT_ID", "AZURE_CLIENT_ID", "FABRIC_CLIENT_ID"],
+    "FABRIC_CLIENT_SECRET": ["CLIENT_SECRET", "AZURE_CLIENT_SECRET", "FABRIC_CLIENT_SECRET"],
+    "FABRIC_WORKSPACE_ID": ["WORKSPACE_ID", "FABRIC_WORKSPACE_ID"],
+    "FABRIC_ENVIRONMENT": ["ENVIRONMENT", "FABRIC_ENVIRONMENT"],
 }
 
 
 def get_env_variable(name: str, default: str = None) -> str:
-    """Get an environment variable with optional legacy aliases.
-
-    If no value is found and no default is provided, raises ValueError.
-    """
     value = os.getenv(name)
     if value is None:
         for alias in _ALIASES.get(name, []):
