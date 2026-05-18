@@ -36,7 +36,7 @@ Developers create feature branches from the dashboard master branch.
 
 Example:
 
-- `feature/ShivaramJ/SalesDashboard`
+- `feature/ShivaramJimada/SalesDashboard`
 
 Before working, the feature branch should be up to date with both:
 
@@ -143,12 +143,12 @@ For local development, use `.env` or set the variables in PowerShell before runn
 Required variables:
 
 ```dotenv
-FABRIC_TENANT_ID="..."
-FABRIC_CLIENT_ID="..."
-FABRIC_CLIENT_SECRET="..."
-FABRIC_ENVIRONMENT="development"
-FABRIC_WORKSPACE_ID="..."
-REPORT_FOLDER="SalesDashboard"
+TENANT_ID="..."
+CLIENT_ID="..."
+CLIENT_SECRET="..."
+ENVIRONMENT="development"
+WORKSPACE_ID="..."
+REPORT_FOLDER="SalesDashboard" (This is not required as GitActions will auto fetch based on the master/branchname)
 PYTHONUNBUFFERED="1"
 ```
 
@@ -173,7 +173,8 @@ python -u .\scripts\deploy.py
 It is used to keep report and semantic model references aligned across environments, including:
 
 - Workspace URLs
-- Fabric data warehouse host names
+- datasource names, database names
+- Works with Snowflake, Databrics, SQL and mostly used.
 - Optional environment variable based replacements
 
 Important notes:
