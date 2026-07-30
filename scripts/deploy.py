@@ -6,6 +6,7 @@ from auth import get_fabric_credential, get_workspace_id, get_environment
 from semantic_model_list import export_models
 from semantic_model_id_replace import replace_ids
 from semantic_model_refresh import refresh_semantic_model
+from gateway_binding import bind_gateway_if_configured
 append_feature_flag("enable_experimental_features")
 append_feature_flag("enable_include_folder")
 start = time.time()
@@ -83,6 +84,7 @@ else:
         print(f"[REFRESH] {'Trigger' if did else 'SKIP'}: {sm}" + (f" ({did})" if did else ""))
         if did:
             try:
+                bind_gateway_if_configured(credential, workspace_id, did, sm, environment)
                 refresh_semantic_model(credential, workspace_id, did)
             except Exception as ex:
                 print(f"[REFRESH] ERROR for {sm} ({did}): {ex}")
