@@ -35,6 +35,7 @@ def simple_yaml_load(text: str):
 
         indent = len(line) - len(line.lstrip(' '))
 
+        # Handle top-level list item e.g., - model-name: "CaPex_KPI_SM_Gateway_Test"
         if stripped.startswith('-'):
             item_content = stripped[1:].strip()
             current_item = {}
@@ -171,55 +172,99 @@ def get_connection_ids_for_model(config_data, model_name: str, environment: str)
 def bind_gateway_connection(credential, workspace_id: str, dataset_id: str,
                             connection_ids: list, gateway_object_id: str = CLOUD_GATEWAY_ID) -> bool:
     """
-    Calls Power BI REST API (Default.BindToGateway) to bind dataset to specified connection IDs.
+    Calls Power BI / Fabric REST API to bind semantic model data sources to Cloud Connections.
+    Supports Power BI Default.BindToGateway (with cloud connection GUID 00000000-0000-0000-0000-000000000000)
+    as well as Fabric bindConnection REST API.
     """
     if not connection_ids:
         logger.info("[GATEWAY BINDING] No connection IDs provided for binding.")
         return False
 
     token = credential.get_token("https://analysis.windows.net/powerbi/api/.default").token
-    url = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets/{dataset_id}/Default.BindToGateway"
+    session = requests.Session()
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
-    payload = {
+
+    # Method 1: Power BI REST API Default.BindToGateway with Cloud Connection GUID placeholder
+    url_pbi = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets/{dataset_id}/Default.BindToGateway"
+    payload_pbi = {
         "gatewayObjectId": gateway_object_id,
         "datasourceObjectIds": connection_ids
     }
 
-    session = requests.Session()
-
     for attempt in range(MAX_ATTEMPTS):
         try:
-            r = session.post(url, headers=headers, json=payload, timeout=30)
+            r = session.post(url_pbi, headers=headers, json=payload_pbi, timeout=30)
+            if r.status_code in (200, 202):
+                print(f"[GATEWAY BINDING] ✅ Cloud connections bound for dataset {dataset_id} to connection IDs: {connection_ids}")
+                return True
+
+            if r.status_code in (429, 500, 502, 503, 504, 409):
+                sleep_for = min(2 ** attempt, BACKOFF_MAX)
+                logger.debug("Transient response %s during gateway binding, retrying in %ss...", r.status_code, sleep_for)
+                time.sleep(sleep_for)
+                continue
+
+            logger.warning(f"[GATEWAY BINDING] Default.BindToGateway returned {r.status_code}: {r.text}")
+            break
         except RequestException as ex:
             sleep_for = min(2 ** attempt, BACKOFF_MAX)
-            logger.debug("BindToGateway POST exception (attempt %d): %s", attempt + 1, ex)
+            logger.debug("BindToGateway exception (attempt %d): %s", attempt + 1, ex)
             time.sleep(sleep_for)
-            continue
 
-        if r.status_code in (200, 202):
-            print(f"[GATEWAY BINDING] ✅ Successfully bound dataset {dataset_id} to connections: {connection_ids}")
+    # Method 2: Power BI REST API without gatewayObjectId
+    payload_pbi_nogw = {
+        "datasourceObjectIds": connection_ids
+    }
+    try:
+        r2 = session.post(url_pbi, headers=headers, json=payload_pbi_nogw, timeout=30)
+        if r2.status_code in (200, 202):
+            print(f"[GATEWAY BINDING] ✅ Cloud connections bound (datasourceObjectIds) for dataset {dataset_id}: {connection_ids}")
             return True
+    except Exception as ex:
+        logger.debug("Fallback payload exception: %s", ex)
 
-        if r.status_code in (429, 500, 502, 503, 504, 409):
-            sleep_for = min(2 ** attempt, BACKOFF_MAX)
-            logger.debug("Transient response %s during gateway binding, retrying after %s seconds", r.status_code, sleep_for)
-            time.sleep(sleep_for)
-            continue
+    # Method 3: Fabric REST API bindConnection
+    try:
+        fabric_token = credential.get_token("https://api.fabric.microsoft.com/.default").token
+        fabric_headers = {
+            "Authorization": f"Bearer {fabric_token}",
+            "Content-Type": "application/json",
+        }
+        url_fabric = f"https://api.fabric.microsoft.com/v1/workspaces/{workspace_id}/semanticModels/{dataset_id}/bindConnection"
 
-        print(f"[GATEWAY BINDING] ❌ Gateway binding failed: {r.status_code} {r.text}")
-        raise RuntimeError(f"Gateway binding failed for dataset {dataset_id}: {r.status_code} {r.text}")
-    else:
-        raise RuntimeError(f"Gateway binding failed after retries for dataset {dataset_id}")
+        success_count = 0
+        for cid in connection_ids:
+            payload_fabric = {
+                "connectionBinding": {
+                    "id": cid,
+                    "connectivityType": "ShareableCloudConnection"
+                }
+            }
+            try:
+                rf = session.post(url_fabric, headers=fabric_headers, json=payload_fabric, timeout=30)
+                if rf.status_code in (200, 202):
+                    success_count += 1
+            except Exception as ex:
+                logger.debug("Fabric bindConnection exception for connection %s: %s", cid, ex)
+
+        if success_count > 0:
+            print(f"[GATEWAY BINDING] ✅ Bound {success_count}/{len(connection_ids)} cloud connection(s) via Fabric API for dataset {dataset_id}")
+            return True
+    except Exception as ex:
+        logger.debug("Fabric API token exception: %s", ex)
+
+    print(f"[GATEWAY BINDING] ❌ Cloud connection binding failed for dataset {dataset_id}")
+    raise RuntimeError(f"Cloud connection binding failed for dataset {dataset_id}")
 
 
 def bind_gateway_if_configured(credential, workspace_id: str, dataset_id: str,
                                model_name: str, environment: str, yml_path: str = None) -> bool:
     """
     Checks if model_name is configured in gateway-binding.yml for the given environment.
-    If configured, triggers gateway binding before refresh.
+    If configured, triggers gateway/cloud connection binding before refresh.
     """
     found_path, config_data = find_gateway_binding_config(yml_path)
     if not found_path or not config_data:
