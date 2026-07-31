@@ -143,7 +143,12 @@ def apply_parameter_overrides(repo_dir: str, target_dir: str) -> bool:
         return False
 
     # Get model names currently being deployed in target_dir
-    deploying_models = [p.stem.lower() for p in Path(target_dir).rglob("*.SemanticModel") if p.is_dir()]
+    deploying_models = set()
+    for p in Path(target_dir).rglob("*.SemanticModel"):
+        if p.is_dir():
+            clean_name = p.stem.replace(".SemanticModel", "").replace(".semanticmodel", "").strip().lower()
+            deploying_models.add(clean_name)
+
     if not deploying_models:
         print("[PARAMETER OVERRIDE] No semantic models found under target_dir.")
         return False
@@ -167,7 +172,9 @@ def apply_parameter_overrides(repo_dir: str, target_dir: str) -> bool:
             item.get("model-name") or
             item.get("modelName") or ""
         )
-        if str(model_name).strip().lower() in deploying_models:
+        clean_item_name = str(model_name).replace(".SemanticModel", "").replace(".semanticmodel", "").strip().lower()
+
+        if clean_item_name in deploying_models:
             find_val = item.get("find_value")
             replace_val = item.get("replace_value")
             if find_val and replace_val:
