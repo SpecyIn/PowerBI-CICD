@@ -169,15 +169,51 @@ def get_connection_ids_for_model(config_data, model_name: str, environment: str)
     return connection_ids
 
 
+def take_over_dataset(credential, workspace_id: str, dataset_id: str) -> bool:
+    """
+    Calls Power BI REST API (Default.TakeOver) to transfer dataset ownership to the Service Principal.
+    """
+    token = credential.get_token("https://analysis.windows.net/powerbi/api/.default").token
+    url = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets/{dataset_id}/Default.TakeOver"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    
+    session = requests.Session()
+    for attempt in range(MAX_ATTEMPTS):
+        try:
+            r = session.post(url, headers=headers, json={}, timeout=30)
+            if r.status_code in (200, 202):
+                print(f"[GATEWAY BINDING] ✅ Dataset ownership taken over by Service Principal for dataset {dataset_id}")
+                return True
+            
+            if r.status_code in (429, 500, 502, 503, 504, 409):
+                sleep_for = min(2 ** attempt, BACKOFF_MAX)
+                time.sleep(sleep_for)
+                continue
+
+            print(f"[GATEWAY BINDING] Warning: TakeOver returned HTTP {r.status_code}: {r.text}")
+            return False
+        except RequestException as ex:
+            sleep_for = min(2 ** attempt, BACKOFF_MAX)
+            time.sleep(sleep_for)
+
+    return False
+
+
 def bind_gateway_connection(credential, workspace_id: str, dataset_id: str,
                             connection_ids: list, gateway_object_id: str = CLOUD_GATEWAY_ID) -> bool:
     """
     Calls Power BI / Fabric REST API to bind semantic model data sources to Cloud Connections.
-    Prints diagnostic output if an API call fails.
+    Takes over dataset ownership first to satisfy owner permissions requirement.
     """
     if not connection_ids:
         print("[GATEWAY BINDING] No connection IDs provided for binding.")
         return False
+
+    # Take over dataset ownership first so Service Principal has full rights to bind gateways
+    take_over_dataset(credential, workspace_id, dataset_id)
 
     token = credential.get_token("https://analysis.windows.net/powerbi/api/.default").token
     session = requests.Session()
