@@ -1,4 +1,5 @@
 import os
+import shutil
 import logging
 from pathlib import Path
 
@@ -8,8 +9,6 @@ except ImportError:
     yaml = None
 
 logger = logging.getLogger(__name__)
-
-BINARY_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.pbix', '.zip', '.exe', '.dll', '.bin'}
 
 
 def simple_yaml_load_overrides(text: str):
@@ -23,8 +22,6 @@ def simple_yaml_load_overrides(text: str):
         stripped = line.strip()
         if not stripped or stripped.startswith('#'):
             continue
-
-        indent = len(line) - len(line.lstrip(' '))
 
         if stripped.startswith('-'):
             item_content = stripped[1:].strip()
@@ -60,6 +57,24 @@ def simple_yaml_load_overrides(text: str):
     return result
 
 
+def simple_yaml_dump_parameters(data: dict) -> str:
+    """Format parameter dictionary back into clean YAML string."""
+    lines = ["find_replace:"]
+    for item in data.get("find_replace", []):
+        if not isinstance(item, dict):
+            continue
+        fv = item.get("find_value", "")
+        lines.append(f'  - find_value: "{fv}"')
+        lines.append('    replace_value:')
+        rv = item.get("replace_value", {})
+        if isinstance(rv, dict):
+            for env_k, env_v in rv.items():
+                lines.append(f'      {env_k}: "{env_v}"')
+        elif isinstance(rv, str):
+            lines.append(f'      development: "{rv}"')
+    return "\n".join(lines) + "\n"
+
+
 def find_override_file(repo_dir: str):
     """Find override-parameter.yml in standard locations."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -79,71 +94,48 @@ def find_override_file(repo_dir: str):
     return None
 
 
-def replace_in_folder(folder_path: Path, rules: dict):
-    """Replace text occurrences of find_value -> replace_value across text files in folder_path."""
-    if not rules:
-        return
-
-    count = 0
-    for root, _, files in os.walk(folder_path):
-        for fname in files:
-            ext = os.path.splitext(fname)[1].lower()
-            if ext in BINARY_EXTENSIONS:
-                continue
-
-            fpath = os.path.join(root, fname)
-            try:
-                with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
-
-                modified = content
-                for find_val, replace_val in rules.items():
-                    if find_val and find_val in modified and find_val != replace_val:
-                        modified = modified.replace(find_val, str(replace_val))
-
-                if modified != content:
-                    with open(fpath, "w", encoding="utf-8", newline="\n") as f:
-                        f.write(modified)
-                    count += 1
-            except Exception as e:
-                logger.debug("Failed to process %s: %s", fpath, e)
-
-    print(f"[PARAMETER OVERRIDE] Updated {count} file(s) under '{folder_path.name}'.")
-
-
-def apply_parameter_overrides(repo_dir: str, target_dir: str, environment: str = "development") -> bool:
+def build_parameter_yml_for_model(repo_dir: str, model_name: str) -> bool:
     """
-    Applies model-specific parameter overrides directly to each semantic model under target_dir.
-    For each model, combines generic parameter.yml rules with override-parameter.yml rules
-    for that specific model name, and updates that model's files in place.
+    Generates parameter.yml dynamically for a specific model_name.
+    Combines base generic parameter rules with model-specific overrides from override-parameter.yml.
     """
     param_file = os.path.join(repo_dir, "parameter.yml")
-    if not os.path.isfile(param_file):
-        param_file = os.path.join(repo_dir, "parameter.yaml")
+    backup_file = os.path.join(repo_dir, ".parameter_base_backup.yml")
 
-    base_rules = []
-    if os.path.isfile(param_file):
-        try:
-            with open(param_file, "r", encoding="utf-8") as f:
-                content = f.read()
-            if yaml is not None:
-                data = yaml.safe_load(content) or {}
-                base_rules = data.get("find_replace", []) if isinstance(data, dict) else []
-            else:
-                base_rules = simple_yaml_load_overrides(content)
-        except Exception as e:
-            print(f"[PARAMETER OVERRIDE] Warning reading base parameter.yml: {e}")
+    # Create initial backup of base parameter.yml if not already created
+    if not os.path.isfile(backup_file):
+        if os.path.isfile(param_file):
+            shutil.copy2(param_file, backup_file)
+        else:
+            print("[PARAMETER OVERRIDE] Base parameter.yml not found.")
+            return False
 
+    # Read base rules from backup
+    base_data = None
+    try:
+        with open(backup_file, "r", encoding="utf-8") as f:
+            content_base = f.read()
+        if yaml is not None:
+            base_data = yaml.safe_load(content_base) or {}
+        if not base_data:
+            base_data = {"find_replace": simple_yaml_load_overrides(content_base)}
+    except Exception as e:
+        print(f"[PARAMETER OVERRIDE] Failed to read base parameter file: {e}")
+        return False
+
+    base_rules = base_data.get("find_replace", []) if isinstance(base_data, dict) else []
+
+    # Read override-parameter.yml
     override_file = find_override_file(repo_dir)
     override_items = []
     if override_file:
         try:
             with open(override_file, "r", encoding="utf-8") as f:
-                content = f.read()
+                content_override = f.read()
             if yaml is not None:
-                odata = yaml.safe_load(content) or {}
+                odata = yaml.safe_load(content_override) or {}
             else:
-                odata = simple_yaml_load_overrides(content)
+                odata = simple_yaml_load_overrides(content_override)
 
             if isinstance(odata, dict):
                 override_items = odata.get("overrides") or odata.get("find_replace") or []
@@ -152,66 +144,76 @@ def apply_parameter_overrides(repo_dir: str, target_dir: str, environment: str =
             elif isinstance(odata, list):
                 override_items = odata
         except Exception as e:
-            print(f"[PARAMETER OVERRIDE] Warning reading override-parameter.yml: {e}")
+            print(f"[PARAMETER OVERRIDE] Failed to read override file: {e}")
 
-    # Find all *.SemanticModel folders under target_dir
-    model_dirs = [p for p in Path(target_dir).rglob("*.SemanticModel") if p.is_dir()]
-    if not model_dirs:
-        print(f"[PARAMETER OVERRIDE] No *.SemanticModel folders found under {target_dir}")
-        return False
+    clean_target_model = model_name.replace(".SemanticModel", "").replace(".semanticmodel", "").strip().lower()
 
-    env_lower = environment.strip().lower()
+    # Collect overrides specific to THIS model_name
+    model_overrides = {}
+    for item in override_items:
+        if not isinstance(item, dict):
+            continue
+        mname = (
+            item.get("model_name") or
+            item.get("model-name") or
+            item.get("modelName") or ""
+        )
+        clean_mname = str(mname).replace(".SemanticModel", "").replace(".semanticmodel", "").strip().lower()
 
-    for model_path in model_dirs:
-        model_folder_name = model_path.name
-        model_stem = model_path.stem.replace(".SemanticModel", "").replace(".semanticmodel", "").strip().lower()
+        if clean_mname == clean_target_model:
+            fv = item.get("find_value")
+            rv = item.get("replace_value")
+            if fv and rv:
+                model_overrides[str(fv).strip().lower()] = {
+                    "find_value": fv,
+                    "replace_value": rv
+                }
+                print(f"[PARAMETER OVERRIDE] Model '{model_name}': Applying override for find_value '{fv}'")
 
-        # Build base rules dictionary for this environment
-        effective_rules = {}
+    # Merge base rules with model-specific overrides
+    merged_rules = []
+    overridden_keys = set()
 
-        for rule in base_rules:
-            if isinstance(rule, dict):
-                fv = rule.get("find_value")
-                rv = rule.get("replace_value")
-                if fv and rv:
-                    val_for_env = fv
-                    if isinstance(rv, dict):
-                        for k, v in rv.items():
-                            if str(k).strip().lower() == env_lower:
-                                val_for_env = v
-                                break
-                    elif isinstance(rv, str):
-                        val_for_env = rv
-                    effective_rules[fv] = val_for_env
+    for rule in base_rules:
+        if not isinstance(rule, dict):
+            merged_rules.append(rule)
+            continue
+        fv = rule.get("find_value")
+        if fv:
+            fv_key = str(fv).strip().lower()
+            if fv_key in model_overrides:
+                merged_rules.append(model_overrides[fv_key])
+                overridden_keys.add(fv_key)
+            else:
+                merged_rules.append(rule)
+        else:
+            merged_rules.append(rule)
 
-        # Overlay overrides matching THIS model name
-        for item in override_items:
-            if not isinstance(item, dict):
-                continue
-            item_model = (
-                item.get("model_name") or
-                item.get("model-name") or
-                item.get("modelName") or ""
-            )
-            clean_item_model = str(item_model).replace(".SemanticModel", "").replace(".semanticmodel", "").strip().lower()
+    for fv_key, rule in model_overrides.items():
+        if fv_key not in overridden_keys:
+            merged_rules.append(rule)
 
-            if clean_item_model == model_stem:
-                fv = item.get("find_value")
-                rv = item.get("replace_value")
-                if fv and rv:
-                    val_for_env = fv
-                    if isinstance(rv, dict):
-                        for k, v in rv.items():
-                            if str(k).strip().lower() == env_lower:
-                                val_for_env = v
-                                break
-                    elif isinstance(rv, str):
-                        val_for_env = rv
-                    effective_rules[fv] = val_for_env
-                    print(f"[PARAMETER OVERRIDE] Model '{model_folder_name}': Overriding '{fv}' -> '{val_for_env}' for env '{environment}'")
+    final_data = {"find_replace": merged_rules}
 
-        print(f"[PARAMETER OVERRIDE] Applying parameters to model '{model_folder_name}' for environment '{environment}'...")
-        replace_in_folder(model_path, effective_rules)
+    # Write merged configuration back to parameter.yml
+    with open(param_file, "w", encoding="utf-8") as f:
+        if yaml is not None:
+            yaml.safe_dump(final_data, f, sort_keys=False, default_flow_style=False)
+        else:
+            f.write(simple_yaml_dump_parameters(final_data))
 
-    print(f"[PARAMETER OVERRIDE] ✅ Finished parameter processing for models in {target_dir}.")
     return True
+
+
+def restore_base_parameter_yml(repo_dir: str):
+    """Restores original parameter.yml from backup if backup exists."""
+    param_file = os.path.join(repo_dir, "parameter.yml")
+    backup_file = os.path.join(repo_dir, ".parameter_base_backup.yml")
+
+    if os.path.isfile(backup_file):
+        try:
+            shutil.copy2(backup_file, param_file)
+            os.remove(backup_file)
+            print("[PARAMETER OVERRIDE] Restored original base parameter.yml.")
+        except Exception as e:
+            logger.warning("[PARAMETER OVERRIDE] Could not restore base parameter.yml: %s", e)
