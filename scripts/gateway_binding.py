@@ -173,11 +173,10 @@ def bind_gateway_connection(credential, workspace_id: str, dataset_id: str,
                             connection_ids: list, gateway_object_id: str = CLOUD_GATEWAY_ID) -> bool:
     """
     Calls Power BI / Fabric REST API to bind semantic model data sources to Cloud Connections.
-    Supports Power BI Default.BindToGateway (with cloud connection GUID 00000000-0000-0000-0000-000000000000)
-    as well as Fabric bindConnection REST API.
+    Prints diagnostic output if an API call fails.
     """
     if not connection_ids:
-        logger.info("[GATEWAY BINDING] No connection IDs provided for binding.")
+        print("[GATEWAY BINDING] No connection IDs provided for binding.")
         return False
 
     token = credential.get_token("https://analysis.windows.net/powerbi/api/.default").token
@@ -187,32 +186,53 @@ def bind_gateway_connection(credential, workspace_id: str, dataset_id: str,
         "Content-Type": "application/json",
     }
 
-    # Method 1: Power BI REST API Default.BindToGateway with Cloud Connection GUID placeholder
+    errors = []
+
+    # Step 0: Try to query GET gateways for dataset to find available gateway/cloud connection IDs
+    url_get_gw = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets/{dataset_id}/gateways"
+    discovered_gateway_id = gateway_object_id
+    try:
+        r_gw = session.get(url_get_gw, headers=headers, timeout=30)
+        if r_gw.status_code == 200:
+            gw_data = r_gw.json()
+            gw_list = gw_data.get("value", [])
+            if gw_list:
+                discovered_gateway_id = gw_list[0].get("id") or gateway_object_id
+                print(f"[GATEWAY BINDING] Discovered gateway/cloud ID for dataset: {discovered_gateway_id}")
+    except Exception as ex:
+        logger.debug("GET gateways failed: %s", ex)
+
+    # Method 1: Power BI REST API Default.BindToGateway
     url_pbi = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets/{dataset_id}/Default.BindToGateway"
-    payload_pbi = {
-        "gatewayObjectId": gateway_object_id,
-        "datasourceObjectIds": connection_ids
-    }
 
-    for attempt in range(MAX_ATTEMPTS):
-        try:
-            r = session.post(url_pbi, headers=headers, json=payload_pbi, timeout=30)
-            if r.status_code in (200, 202):
-                print(f"[GATEWAY BINDING] ✅ Cloud connections bound for dataset {dataset_id} to connection IDs: {connection_ids}")
-                return True
+    gateway_ids_to_try = [discovered_gateway_id]
+    if CLOUD_GATEWAY_ID not in gateway_ids_to_try:
+        gateway_ids_to_try.append(CLOUD_GATEWAY_ID)
 
-            if r.status_code in (429, 500, 502, 503, 504, 409):
+    for gw_id in gateway_ids_to_try:
+        payload_pbi = {
+            "gatewayObjectId": gw_id,
+            "datasourceObjectIds": connection_ids
+        }
+        for attempt in range(MAX_ATTEMPTS):
+            try:
+                r = session.post(url_pbi, headers=headers, json=payload_pbi, timeout=30)
+                if r.status_code in (200, 202):
+                    print(f"[GATEWAY BINDING] ✅ Cloud connections bound for dataset {dataset_id} using gatewayObjectId '{gw_id}' to connection IDs: {connection_ids}")
+                    return True
+
+                if r.status_code in (429, 500, 502, 503, 504, 409):
+                    sleep_for = min(2 ** attempt, BACKOFF_MAX)
+                    time.sleep(sleep_for)
+                    continue
+
+                msg = f"Default.BindToGateway (gatewayObjectId={gw_id}) returned HTTP {r.status_code}: {r.text}"
+                print(f"[GATEWAY BINDING] Warning: {msg}")
+                errors.append(msg)
+                break
+            except RequestException as ex:
                 sleep_for = min(2 ** attempt, BACKOFF_MAX)
-                logger.debug("Transient response %s during gateway binding, retrying in %ss...", r.status_code, sleep_for)
                 time.sleep(sleep_for)
-                continue
-
-            logger.warning(f"[GATEWAY BINDING] Default.BindToGateway returned {r.status_code}: {r.text}")
-            break
-        except RequestException as ex:
-            sleep_for = min(2 ** attempt, BACKOFF_MAX)
-            logger.debug("BindToGateway exception (attempt %d): %s", attempt + 1, ex)
-            time.sleep(sleep_for)
 
     # Method 2: Power BI REST API without gatewayObjectId
     payload_pbi_nogw = {
@@ -221,10 +241,13 @@ def bind_gateway_connection(credential, workspace_id: str, dataset_id: str,
     try:
         r2 = session.post(url_pbi, headers=headers, json=payload_pbi_nogw, timeout=30)
         if r2.status_code in (200, 202):
-            print(f"[GATEWAY BINDING] ✅ Cloud connections bound (datasourceObjectIds) for dataset {dataset_id}: {connection_ids}")
+            print(f"[GATEWAY BINDING] ✅ Cloud connections bound (datasourceObjectIds only) for dataset {dataset_id}: {connection_ids}")
             return True
+        msg2 = f"Default.BindToGateway (no gatewayObjectId) returned HTTP {r2.status_code}: {r2.text}"
+        print(f"[GATEWAY BINDING] Warning: {msg2}")
+        errors.append(msg2)
     except Exception as ex:
-        logger.debug("Fallback payload exception: %s", ex)
+        errors.append(f"No-gatewayObjectId payload exception: {ex}")
 
     # Method 3: Fabric REST API bindConnection
     try:
@@ -247,17 +270,25 @@ def bind_gateway_connection(credential, workspace_id: str, dataset_id: str,
                 rf = session.post(url_fabric, headers=fabric_headers, json=payload_fabric, timeout=30)
                 if rf.status_code in (200, 202):
                     success_count += 1
+                else:
+                    msg_fab = f"Fabric bindConnection for {cid} returned HTTP {rf.status_code}: {rf.text}"
+                    print(f"[GATEWAY BINDING] Warning: {msg_fab}")
+                    errors.append(msg_fab)
             except Exception as ex:
-                logger.debug("Fabric bindConnection exception for connection %s: %s", cid, ex)
+                errors.append(f"Fabric bindConnection exception for {cid}: {ex}")
 
         if success_count > 0:
             print(f"[GATEWAY BINDING] ✅ Bound {success_count}/{len(connection_ids)} cloud connection(s) via Fabric API for dataset {dataset_id}")
             return True
     except Exception as ex:
-        logger.debug("Fabric API token exception: %s", ex)
+        errors.append(f"Fabric token acquisition exception: {ex}")
 
-    print(f"[GATEWAY BINDING] ❌ Cloud connection binding failed for dataset {dataset_id}")
-    raise RuntimeError(f"Cloud connection binding failed for dataset {dataset_id}")
+    print(f"[GATEWAY BINDING] ❌ Cloud connection binding failed for dataset {dataset_id}.")
+    print("[GATEWAY BINDING] Detailed diagnostic error log:")
+    for err in errors:
+        print(f"  - {err}")
+
+    raise RuntimeError(f"Cloud connection binding failed for dataset {dataset_id}. Details: {'; '.join(errors)}")
 
 
 def bind_gateway_if_configured(credential, workspace_id: str, dataset_id: str,
