@@ -1,7 +1,6 @@
 import os
 import shutil
 import logging
-from pathlib import Path
 
 try:
     import yaml
@@ -51,7 +50,7 @@ def simple_yaml_load_overrides(text: str):
                 elif val:
                     if current_env and 'replace_value' in current_item and isinstance(current_item['replace_value'], dict):
                         current_item['replace_value'][current_env] = val
-                    elif key in ('model_name', 'model-name', 'modelName', 'find_value'):
+                    elif key in ('model_name', 'model-name', 'modelName', 'find_value', 'takeover', 'take_over', 'takeOver'):
                         current_item[key] = val
 
     return result
@@ -92,6 +91,83 @@ def find_override_file(repo_dir: str):
         if os.path.isfile(p):
             return p
     return None
+
+
+def should_takeover_model(repo_dir: str, model_name: str) -> bool:
+    """
+    Checks override-parameter.yml to see if any override entry for model_name has takeover set to 'Yes' / True.
+    Returns True if at least 1 entry for model_name specifies takeover: 'Yes', else False.
+    """
+    override_file = find_override_file(repo_dir)
+    if not override_file:
+        return False
+
+    override_items = []
+    try:
+        with open(override_file, "r", encoding="utf-8") as f:
+            content_override = f.read()
+        if yaml is not None:
+            odata = yaml.safe_load(content_override) or {}
+        else:
+            odata = simple_yaml_load_overrides(content_override)
+
+        if isinstance(odata, dict):
+            override_items = odata.get("overrides") or odata.get("find_replace") or []
+            if not isinstance(override_items, list):
+                override_items = [override_items]
+        elif isinstance(odata, list):
+            override_items = odata
+    except Exception as e:
+        logger.warning("[TAKEOVER] Failed to read override file for takeover check: %s", e)
+        return False
+
+    clean_target_model = str(model_name).replace(".SemanticModel", "").replace(".semanticmodel", "").strip().lower()
+
+    for item in override_items:
+        if not isinstance(item, dict):
+            continue
+
+        mname = (
+            item.get("model_name") or
+            item.get("model-name") or
+            item.get("modelName") or ""
+        )
+        clean_mname = str(mname).replace(".SemanticModel", "").replace(".semanticmodel", "").strip().lower()
+
+        if clean_mname == clean_target_model:
+            takeover_val = item.get("takeover") or item.get("take_over") or item.get("takeOver")
+            if takeover_val is not None:
+                str_val = str(takeover_val).strip().lower()
+                if str_val in ("yes", "y", "true", "1") or takeover_val is True:
+                    return True
+
+    return False
+
+
+def take_over_dataset(credential, workspace_id: str, dataset_id: str) -> bool:
+    """
+    Calls Power BI REST API (Default.TakeOver) to transfer dataset ownership to the Service Principal.
+    """
+    import requests
+    try:
+        token = credential.get_token("https://analysis.windows.net/powerbi/api/.default").token
+        url = f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets/{dataset_id}/Default.TakeOver"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+        session = requests.Session()
+        r = session.post(url, headers=headers, json={}, timeout=30)
+        if r.status_code in (200, 202):
+            print(f"[TAKEOVER] ✅ Dataset ownership taken over by Service Principal for dataset {dataset_id}")
+            return True
+
+        print(f"[TAKEOVER] Warning: TakeOver returned HTTP {r.status_code}: {r.text}")
+        return False
+    except Exception as ex:
+        print(f"[TAKEOVER] ERROR taking over dataset {dataset_id}: {ex}")
+        return False
 
 
 def build_parameter_yml_for_model(repo_dir: str, model_name: str) -> bool:
